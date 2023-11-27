@@ -1,9 +1,15 @@
-from collections import Counter
-import json
 import os
 import sys
+import glob
+import json
+import datetime
+from collections import Counter
+from collections import Counter
 
-from secret import get_auth
+import pandas as pd
+from matplotlib import pyplot as plt
+import seaborn as sns
+from nltk.corpus import stopwords
 
 
 def break_combined_weeks(combined_weeks):
@@ -153,7 +159,6 @@ def get_messages_from_channel(channel_path):
     channel_json_files = os.listdir(channel_path)
     channel_msgs = [json.load(open(channel_path + "/" + f)) for f in channel_json_files]
 
-    nloop = len(channel_msgs)
     df = pd.concat([pd.DataFrame(get_messages_dict(msgs)) for msgs in channel_msgs])
     print(f"Number of messages in channel: {len(df)}")
     
@@ -175,96 +180,3 @@ def convert_2_timestamp(column, data):
                 timestamp_.append(a.strftime('%Y-%m-%d %H:%M:%S'))
         return timestamp_
     else: print(f"{column} not in data")
-
-def slack_parser(path, channel):
-    """ parse slack data to extract useful informations from the json file
-    step of execution
-    1. Import the required modules
-    2. read all json file from the provided path
-    3. combine all json files in the provided path
-    4. extract all required informations from the slack data
-    5. convert to dataframe and merge all
-    6. reset the index and return dataframe
-    """
-    users = pd.read_json(cfg.userfile)[['id', 'real_name']]
-    combined = []
-    dfall = pd.DataFrame()
-
-    # specify path to get json files
-    try:
-        for json_file in glob.glob(f"{path}*.json"):
-            with open(json_file, 'r') as slack_data:
-                combined.append(slack_data)
-        print("Total Days ", len(combined))
-    except Exception as e:
-        print(e)
-        print('Parser stopped!!')
-
-    # loop through jsonfiles
-    print('parser starting..')
-    for i in combined:
-        slack_data = json.load(open(i.name, 'r', encoding="utf8"))
-
-        slack_id, student_id, week, msg_content, sender_id, time_msg, msg_dist, time_thread_st, reply_users, \
-        reply_count, reply_users_count, tm_thread_end = [],[],[],[],[],[],[],[],[],[],[], []
-        # print('comboned')
-        for row in slack_data:
-            if 'bot_id' in row.keys():
-                print('Bot ID found')
-                continue
-            else:
-                try:
-                    slack_id.append(row['user'])
-                    student_id.append(row['user'])
-                    week.append(row['type'])
-                    msg_content.append(row['text'])
-                    if 'user' in row.keys(): sender_id.append(row['user'])
-                    else: sender_id.append('Not provided')
-                    time_msg.append(row['ts'])
-                    if 'blocks' in row.keys() and len(row['blocks'][0]['elements'][0]['elements']) != 0 :
-                         msg_dist.append(row['blocks'][0]['elements'][0]['elements'][0]['type'])
-                    else: msg_dist.append('reshared')
-                    if 'thread_ts' in row.keys():
-                        time_thread_st.append(row['thread_ts'])
-                    else:
-                        time_thread_st.append(row['ts'])
-                    if 'reply_users' in row.keys(): reply_users.append(",".join(row['reply_users'])) 
-                    else:    reply_users.append(0)
-                    if 'reply_count' in row.keys():
-                        reply_count.append(row['reply_count'])
-                        reply_users_count.append(row['reply_users_count'])
-                        tm_thread_end.append(row['latest_reply'])
-                    else:
-                        reply_count.append(0)
-                        reply_users_count.append(0)
-                        tm_thread_end.append(row['ts'])
-                except Exception as e:
-                    print(e)
-
-        data = zip(slack_id, student_id, week, msg_content, sender_id, time_msg, msg_dist, time_thread_st,
-         reply_count, reply_users_count, reply_users, tm_thread_end)
-        columns = ['slack_id', 'student_id', 'week', 'msg_content', 'sender_name', 'msg_sent_time', 'msg_dist_type',
-         'time_thread_start', 'reply_count', 'reply_users_count', 'reply_users', 'tm_thread_end']
-        # print("converting to dataframe")
-        df = pd.DataFrame(data=data, columns=columns)
-        dfall=dfall.append(df)
-        dfall = dfall[dfall['sender_name'] != 'Not provided']
-
-        dfall = dfall.reset_index(drop=True)
-
-    dfall = dfall.merge(users, left_on='sender_name', right_on='id', how='inner')
-
-    dfall = dfall.drop(['sender_name', 'id'], axis=1)
-
-    print("converting from unix timestamp to good timestamp")
-
-
-    dfall['time_thread_start'] = convert_2_timestamp('time_thread_start', dfall)
-    dfall['msg_sent_time'] = convert_2_timestamp('msg_sent_time', dfall)
-    dfall['tm_thread_end'] = convert_2_timestamp('tm_thread_end', dfall)
-    dfall['channel'] = channel
-
-
-    print(f"file returned successfully!!! {dfall.columns}")
-
-    return dfall.to_csv(cfg.filename, index=False)

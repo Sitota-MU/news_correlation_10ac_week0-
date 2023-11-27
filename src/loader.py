@@ -11,7 +11,7 @@ from time import sleep
 
 
 # Create wrapper classes for using slack_sdk in place of slacker
-class Slacker_Wrapper:
+class SlackDataLoader:
     '''
     Slack exported data IO class.
 

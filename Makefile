@@ -20,7 +20,6 @@ lint:
 	poetry run flake8 src
 
 
-# Path: src
 run:
 	poetry run python3 main.py
 
